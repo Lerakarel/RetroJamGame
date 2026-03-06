@@ -4,59 +4,60 @@ public class RoomSpawner : MonoBehaviour
 {
     public int openSide;
     private RoomTemplates templates;
-    public bool spawned = false;
-
+    private int rand;
+    private bool spawned = false;
     void Start()
     {
         templates = GameObject.FindGameObjectWithTag("Rooms").GetComponent<RoomTemplates>();
-        // Un tiempo ligeramente mayor ayuda a que las colisiones se registren mejor
-        Invoke("Spawn", 0.4f);
+        Invoke("Spawn", 0.1f);
     }
 
     void Spawn()
     {
-        if (!spawned)
+        // 1. Si ya se marcó como spawned (por colisión en OnTriggerEnter), abortamos
+        if (spawned) return;
+
+        // 2. COMPROBACIÓN EXTRA: ¿Hay ya una habitación o algo aquí?
+        // Creamos un radio pequeño (0.1f) para detectar si el espacio está ocupado
+        Collider[] hitColliders = Physics.OverlapSphere(transform.position, 0.1f);
+        foreach (var hitCollider in hitColliders)
         {
-            if (templates == null) return;
-
-            // ... (Tu código de detección de colisiones se mantiene igual)
-
-            GameObject roomToInstantiate = null;
-
-            if (templates.rooms.Count < templates.maxRooms)
+            // Si encontramos algo que no sea este mismo SpawnPoint, cancelamos
+            if (hitCollider.gameObject != this.gameObject)
             {
-                // CAMBIO AQUÍ: Conexiones opuestas
-                if (openSide == 1)
-                {
-                    // Spawner mira ABAJO -> Necesita habitación con puerta ARRIBA
-                    roomToInstantiate = templates.topRooms[Random.Range(0, templates.topRooms.Length)];
-                }
-                else if (openSide == 2)
-                {
-                    // Spawner mira ARRIBA -> Necesita habitación con puerta ABAJO
-                    roomToInstantiate = templates.bottomRooms[Random.Range(0, templates.bottomRooms.Length)];
-                }
-                else if (openSide == 3)
-                {
-                    // Spawner mira IZQUIERDA -> Necesita habitación con puerta DERECHA
-                    roomToInstantiate = templates.rigthRooms[Random.Range(0, templates.rigthRooms.Length)];
-                }
-                else if (openSide == 4)
-                {
-                    // Spawner mira DERECHA -> Necesita habitación con puerta IZQUIERDA
-                    roomToInstantiate = templates.leftRooms[Random.Range(0, templates.leftRooms.Length)];
-                }
-
-                if (roomToInstantiate != null)
-                {
-                    Instantiate(roomToInstantiate, transform.position, roomToInstantiate.transform.rotation);
-                    spawned = true;
-                    Destroy(gameObject);
-                    return;
-                }
+                spawned = true;
+                return;
             }
-            spawned = true;
         }
+
+        // 3. Si el camino está despejado, procedemos a instanciar
+        if (openSide == 1)
+        {
+            //Need Bottom Door
+            rand = Random.Range(0, templates.bottomRooms.Length);
+            Instantiate(templates.bottomRooms[rand], transform.position, templates.bottomRooms[rand].transform.rotation);
+        }
+        else if (openSide == 2)
+        {
+            //Need Top Door
+            rand = Random.Range(0, templates.topRooms.Length);
+            Instantiate(templates.topRooms[rand], transform.position, templates.topRooms[rand].transform.rotation);
+        }
+        else if (openSide == 3)
+        {
+            //Need Left Door
+            rand = Random.Range(0, templates.leftRooms.Length);
+            Instantiate(templates.leftRooms[rand], transform.position, templates.leftRooms[rand].transform.rotation);
+        }
+        else if (openSide == 4)
+        {
+            //Need Right Door
+            rand = Random.Range(0, templates.rightRooms.Length);
+            Instantiate(templates.rightRooms[rand], transform.position, templates.rightRooms[rand].transform.rotation);
+        }
+
+        // 4. Marcamos como finalizado
+        spawned = true;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -64,68 +65,25 @@ public class RoomSpawner : MonoBehaviour
         if (other.CompareTag("SpawnPoint"))
         {
             RoomSpawner otherSpawner = other.GetComponent<RoomSpawner>();
-            if (otherSpawner != null)
+
+            if (templates == null)
             {
-                // Si dos puntos de spawn chocan, bloqueamos ambos para que no intenten
-                // crear dos habitaciones en el mismo sitio exacto.
-                if (!spawned && !otherSpawner.spawned)
+                templates = GameObject.FindGameObjectWithTag("Rooms").GetComponent<RoomTemplates>();
+            }
+
+            if (otherSpawner != null && templates != null)
+            {
+                // CAMBIO AQUÍ: Solo el que tenga el ID de instancia menor (o una lógica de prioridad)
+                // decide si poner la habitación cerrada, para evitar que ambos lo hagan.
+                if (otherSpawner.spawned == false && spawned == false)
                 {
-                    // Solo uno sobrevive para intentar el Spawn()
-                    if (gameObject.GetInstanceID() < other.gameObject.GetInstanceID())
-                    {
-                        spawned = true;
-                        Destroy(gameObject);
-                    }
+                    // Verificamos si ya hay una habitación en esta posición exacta antes de crear la cerrada
+                    // Esto evita que si una habitación real ya se puso, no se tape con una pared.
+                    Instantiate(templates.closedRoom, transform.position, Quaternion.identity);
+                    Destroy(gameObject);
                 }
             }
+            spawned = true; // Marcamos como ocupado para que el Invoke "Spawn" no haga nada
         }
-    }
-
-    public void InstantiateClosedRoom(GameObject prefab)
-    {
-        float distance = 5f;
-        Vector3 offset = Vector3.zero;
-
-        if (openSide == 1) offset = new Vector3(0, 0, -distance);
-        else if (openSide == 2) offset = new Vector3(0, 0, distance);
-        else if (openSide == 3) offset = new Vector3(-distance, 0, 0);
-        else if (openSide == 4) offset = new Vector3(distance, 0, 0);
-
-        Vector3 spawnPos = transform.position + offset;
-
-        // --- DETECCIÓN DE PASILLO ---
-        // Si hay una habitación al otro lado, OverlapBox detectará sus colliders
-        Collider[] colliders = Physics.OverlapBox(spawnPos, new Vector3(0.5f, 0.5f, 0.5f));
-        bool pathwayIsClear = true;
-
-        foreach (var col in colliders)
-        {
-            // Si detectamos geometría (no spawners), el camino ya está conectado
-            if (!col.CompareTag("SpawnPoint") && col.gameObject != this.gameObject)
-            {
-                pathwayIsClear = false;
-                break;
-            }
-        }
-
-        // Si el camino está despejado (da al vacío), ponemos el bloque gris
-        if (pathwayIsClear)
-        {
-            Instantiate(prefab, spawnPos, transform.rotation);
-        }
-    }
-
-    private void OnDrawGizmos()
-    {
-        float distance = 5f;
-        Vector3 offset = Vector3.zero;
-
-        if (openSide == 1) offset = new Vector3(0, 0, -distance);
-        else if (openSide == 2) offset = new Vector3(0, 0, distance);
-        else if (openSide == 3) offset = new Vector3(-distance, 0, 0);
-        else if (openSide == 4) offset = new Vector3(distance, 0, 0);
-
-        Gizmos.color = Color.red;
-        Gizmos.DrawWireCube(transform.position + offset, new Vector3(1f, 1f, 1f));
     }
 }

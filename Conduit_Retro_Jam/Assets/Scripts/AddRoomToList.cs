@@ -6,15 +6,9 @@ public class AddRoomToList : MonoBehaviour
 
     void Start()
     {
-        GameObject roomsObj = GameObject.FindGameObjectWithTag("Rooms");
-        if (roomsObj != null)
-        {
-            templates = roomsObj.GetComponent<RoomTemplates>();
-            templates.rooms.Add(this.gameObject);
-        }
-        else
-        {
-            Debug.LogError("¡No se encontró un objeto con el tag 'Rooms'!");
-        }
+        templates = GameObject.FindGameObjectWithTag("Rooms").GetComponent<RoomTemplates>();
+        templates.rooms.Add(this.gameObject);
     }
+
+
 }

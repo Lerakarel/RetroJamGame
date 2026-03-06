@@ -8,6 +8,7 @@ TagManager:
   - Rooms
   - CinemachineTarget
   - suelo
+  - ClosedRoom
   layers:
   - Default
   - TransparentFX

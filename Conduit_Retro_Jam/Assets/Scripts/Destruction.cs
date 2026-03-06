@@ -4,9 +4,9 @@ public class Destruction : MonoBehaviour
 {
     private void OnTriggerEnter(Collider other)
     {
-        // Verificamos si el objeto NO tiene la etiqueta "suelo"
-        // El símbolo '!' significa "no" o "es diferente a"
-        if (!other.CompareTag("suelo") && !other.CompareTag("Player"))
+        // Solo destruye si el objeto que entró es un punto de generación
+        // y NO es el jugador ni el suelo.
+        if (other.CompareTag("SpawnPoint") || other.CompareTag("ClosedRoom"))
         {
             Destroy(other.gameObject);
         }
